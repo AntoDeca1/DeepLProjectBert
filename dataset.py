@@ -4,7 +4,7 @@ import torch
 import re
 import random
 import transformers
-from transformers import BertTokenizer
+from transformers import BertTokenizer, DistilBertTokenizer
 import tqdm
 from torch.utils.data import Dataset, DataLoader
 import itertools
@@ -14,6 +14,7 @@ import numpy as np
 from torch.optim import Adam
 from torchvision import transforms
 import pandas as pd
+from PIL import Image
 import json
 
 path = 'polyvore_outfits/disjoint'
@@ -48,10 +49,6 @@ def filter_ds(ds):
                     break
             final_outfit.append(negative_item)
             filtered.append(final_outfit)
-
-            # Categoria del 5
-            # Outfit randomico
-            # Prendere item con la stessa categoria del quinto
     return filtered
 
 
@@ -65,5 +62,70 @@ def find_category(outfit, category, metadata):
     return None
 
 
+class Dataset(Dataset):
+    OPTIMAL_LENGTH_PERCENTILE = 70
+
+    def __init__(self, ds):
+        self.tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+        self.cnn_preprocess = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+        self.ds = ds
+        self.optimal_length = self.compute_optimal_length()
+        print()
+
+    def __len__(self):
+        return len(self.ds)
+
+    def get_image(self, image_path):
+        """
+        Retrieve an image given a path
+        :param image_path:
+        :return: image(PIL)
+        """
+        image = Image.open(image_path)
+        return image
+
+    def create_image_path(self, id):
+        """
+        Create the image path
+        :param id: Image Id
+        :return: The path where the image is
+        """
+        return "./polyvore_outfits/images/" + id + ".jpg"
+
+    def __getitem__(self, idx):
+        outfit = self.ds[idx]
+        for item_dict in outfit:
+            item_id = item_dict['item']
+            item_description = item_dict['description']
+            image_path = self.create_image_path(item_id)
+            image = self.get_image(image_path)
+            image_tensor = self.cnn_preprocess(image)
+            tokenized_description = \
+                self.tokenizer(item_description, truncation=True, padding='max_length', max_length=self.optimal_length)[
+                    'input_ids']
+            item_dict['item'] = image_tensor
+            item_dict['description'] = tokenized_description
+        return outfit
+
+    def compute_optimal_length(self):
+        lenghts = []
+        for outfit in self.ds:
+            for item in outfit:
+                item_description = item['description']
+                tokenized_description = self.tokenizer(item_description)['input_ids']
+                lenghts.append(len(tokenized_description))
+        return int(np.percentile(lenghts, self.OPTIMAL_LENGTH_PERCENTILE))
+
+
 train_filtered = filter_ds(train)
 val_filtered = filter_ds(val)
+dataset = Dataset(train_filtered)
+
+loader = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False)
+for X in loader:
+    print(X)
