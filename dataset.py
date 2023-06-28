@@ -17,6 +17,8 @@ import pandas as pd
 from PIL import Image
 import json
 
+from Bert import BertEmbedder
+
 path = 'polyvore_outfits/disjoint'
 chosen_categories = ["tops", "bottoms", "shoes", "jewellery"]
 
@@ -26,7 +28,14 @@ val = json.load(open(f'{path}/valid.json'))
 metadata = json.load(open(f'{path}/../polyvore_item_metadata.json'))
 
 
+# TODO:Spostare filter_ds e find_category nella classe
+# TODO:Provare a far scorrere immagini e testo nelle due architetture pre-addestrate
 def filter_ds(ds):
+    """
+    Iterate through the training set and select only the outfit of 5 elements with the given categories
+    :param ds:
+    :return:
+    """
     filtered = []
     for outfit in ds:
         if len(outfit['items']) != 5: continue
@@ -53,6 +62,13 @@ def filter_ds(ds):
 
 
 def find_category(outfit, category, metadata):
+    """
+    Given an outfit find the outfit(if exist) with the given category
+    :param outfit:
+    :param category:
+    :param metadata:
+    :return:
+    """
     items = outfit['items']
     for item in items:
         item_cat = metadata[item['item_id']]['semantic_category']
@@ -98,6 +114,8 @@ class Dataset(Dataset):
         return "./polyvore_outfits/images/" + id + ".jpg"
 
     def __getitem__(self, idx):
+        images = []
+        descriptions = []
         outfit = self.ds[idx]
         for item_dict in outfit:
             item_id = item_dict['item']
@@ -108,11 +126,21 @@ class Dataset(Dataset):
             tokenized_description = \
                 self.tokenizer(item_description, truncation=True, padding='max_length', max_length=self.optimal_length)[
                     'input_ids']
-            item_dict['item'] = image_tensor
-            item_dict['description'] = tokenized_description
-        return outfit
+            images.append(image_tensor)
+            descriptions.append(tokenized_description)
+
+        images_tensor = torch.stack(images)
+        descriptions_tensor = torch.tensor(descriptions)
+        return images_tensor, descriptions_tensor
 
     def compute_optimal_length(self):
+        """
+        Iterate through the whole training set and after saving all description lengths
+        compute the optimal length
+        "Description bigger than optimal length will be truncated instead the smaller ones
+        padded
+        :return:optimal_length
+        """
         lenghts = []
         for outfit in self.ds:
             for item in outfit:
@@ -127,5 +155,6 @@ val_filtered = filter_ds(val)
 dataset = Dataset(train_filtered)
 
 loader = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False)
-for X in loader:
-    print(X)
+for images_batch, descriptions_batch in loader:
+    print(images_batch.shape)  # (batch_size, 4, 3, 224, 224)
+    print(descriptions_batch.shape)  # (batch_size, 4, 29)
