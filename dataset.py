@@ -1,74 +1,69 @@
-import json
-from PIL import Image
+import os
+from pathlib import Path
 import torch
+import re
+import random
+import transformers
+from transformers import BertTokenizer
+import tqdm
+from torch.utils.data import Dataset, DataLoader
+import itertools
+import math
+import torch.nn.functional as F
+import numpy as np
+from torch.optim import Adam
 from torchvision import transforms
 import pandas as pd
+import json
 
-path_train_json = "./polyvore_outfits/disjoint/train.json"
-path_validation_json = "./polyvore_outfits/disjoint/valid.json"
-path_test_json = "./polyvore_outfits/disjoint/test.json"
-from torch.utils.data import Dataset
+path = 'polyvore_outfits/disjoint'
+chosen_categories = ["tops", "bottoms", "shoes", "jewellery"]
+
+train = json.load(open(f'{path}/train.json'))
+val = json.load(open(f'{path}/valid.json'))
+
+metadata = json.load(open(f'{path}/../polyvore_item_metadata.json'))
 
 
-class DataSet(Dataset):
+def filter_ds(ds):
+    filtered = []
+    for outfit in ds:
+        if len(outfit['items']) != 5: continue
+        final_outfit = [None, None, None, None, None]
+        for item in outfit['items']:
+            item_semantic_cat = metadata[item['item_id']]['semantic_category']
+            item_description = metadata[item['item_id']]['url_name'] + metadata[item['item_id']]['description']
 
-    def __init__(self, path):
-        self.path = path
-        self.transform = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor()
-        ])
-        with open(self.path, 'r') as f:
-            self.json_data = json.load(f)
-        self.df = self.create_id_dataset()
-
-    def get_image(self, image_path):
-        """
-        Retrieve an image given a path
-        :param image_path:
-        :return: image(PIL)
-        """
-        image = Image.open(image_path)
-        return image
-
-    def create_image_path(self, id):
-        """
-        Create the image path
-        :param id: Image Id
-        :return: The path where the image is
-        """
-        return "./polyvore_outfits/images/" + id + ".jpg"
-
-    def __len__(self):
-        return len(self.df)
-
-    def create_id_dataset(self):
-        """
-        Create a dataset containing the ids for each outfit
-        :return: a DataFrame
-        """
-        elements = []
-        for item in self.json_data:
-            element_lists = item['items']
-            elements_id = tuple([el['item_id'] for el in element_lists])
-            elements.append(elements_id)
-        return pd.DataFrame(elements)
-
-    def __getitem__(self, idx):
-        outfit = self.df.iloc[idx]
-        outfit_in_tensors = []
-        for element in outfit:
-            if element is None:
-                tensor_image = torch.randn((3, 224, 224))
-                outfit_in_tensors.append(tensor_image)
+            if item_semantic_cat not in chosen_categories:
+                item_cat_pos = 4
             else:
-                image_path = self.create_image_path(element)
-                image = self.get_image(image_path)
-                tensor_image = self.transform(image)
-                outfit_in_tensors.append(tensor_image)
-        return tuple(outfit_in_tensors)
+                item_cat_pos = chosen_categories.index(item_semantic_cat)
+            final_outfit[item_cat_pos] = {"item": item['item_id'], "description": item_description}
+        if None not in final_outfit:
+            last_category = metadata[final_outfit[-1]['item']]['semantic_category']
+            while True:
+                random_outfit = np.random.choice(train)
+                negative_item = find_category(random_outfit, last_category, metadata)
+                if negative_item:
+                    break
+            final_outfit.append(negative_item)
+            filtered.append(final_outfit)
+
+            # Categoria del 5
+            # Outfit randomico
+            # Prendere item con la stessa categoria del quinto
+    return filtered
 
 
-ds = DataSet(path=path_test_json)
-loader = torch.utils.data.DataLoader(ds, batch_size=64, shuffle=False)
+def find_category(outfit, category, metadata):
+    items = outfit['items']
+    for item in items:
+        item_cat = metadata[item['item_id']]['semantic_category']
+        if item_cat == category:
+            item_description = metadata[item['item_id']]['url_name'] + metadata[item['item_id']]['description']
+            return {"item": item['item_id'], "description": item_description}
+    return None
 
+
+train_filtered = filter_ds(train)
+val_filtered = filter_ds(val)
