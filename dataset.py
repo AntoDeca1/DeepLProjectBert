@@ -153,8 +153,9 @@ class Dataset(Dataset):
 train_filtered = filter_ds(train)
 val_filtered = filter_ds(val)
 dataset = Dataset(train_filtered)
-
+embedder = BertEmbedder()
 loader = torch.utils.data.DataLoader(dataset, batch_size=3, shuffle=False)
 for images_batch, descriptions_batch in loader:
     print(images_batch.shape)  # (batch_size, 4, 3, 224, 224)
-    print(descriptions_batch.shape)  # (batch_size, 4, 29)
+    print(descriptions_batch.shape)
+    embedder(images_batch, descriptions_batch)  # (batch_size, 4, 29)
