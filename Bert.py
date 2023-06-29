@@ -146,13 +146,18 @@ class Bert(nn.Module):
         super().__init__()
         self.embedding = BertEmbedder()
         self.encoder = Encoder(dim_inp, dim_out, attention_heads, dropout=0.1)
-        self.final_embedding_layer = nn.Linear(dim_inp * 6, dim_inp)
+        self.final_embedding_layer = nn.Linear(dim_inp * 4, dim_inp)
 
     def forward(self, imgs, descs):
         embeddings = self.embedding(imgs, descs)
-        encoded = self.encoder(embeddings)
+        input_embeddings = embeddings[:, :4, :]
+        postive_pair = embeddings[:, -2, :]
+        negative_pair = embeddings[:, -1, :]
+        encoded = self.encoder(input_embeddings)
         batch_size, num_elements, embedding_dim = encoded.shape
         encoded_reshaped = encoded.reshape(batch_size, num_elements * embedding_dim)
-        return self.final_embedding_layer(encoded_reshaped)
+
+        final_embedding = self.final_embedding_layer(encoded_reshaped)
+        return final_embedding, postive_pair, negative_pair
 
 # TODO:Generalizzare il codice(parametrizzare)

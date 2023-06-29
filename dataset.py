@@ -138,8 +138,8 @@ class Dataset(Dataset):
         return int(np.percentile(lenghts, self.OPTIMAL_LENGTH_PERCENTILE))
 
 
-# TODO:Ricordarsi di farne passare solo 4
-# TODO:Spostare sopra questa inizializzazione
+# TODO: Ricordarsi di farne passare solo 4
+# TODO: Spostare sopra questa inizializzazione
 dim_input = 128  # Dimensione degli embedding scelta
 dim_output = 64  # Dimensione dei vettori q,k,v nell'Attention Head
 batch_size = 3
@@ -149,6 +149,6 @@ dataset = Dataset(train_filtered)
 bert = Bert(dim_input, dim_output)
 loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=False)
 for images_batch, descriptions_batch in loader:
-    print(images_batch.shape)  # (batch_size, 4, 3, 224, 224)
+    print(images_batch.shape)  # (batch_size, 6, 3, 224, 224)
     print(descriptions_batch.shape)  # (batch_size, 4, 29)
     bert(images_batch, descriptions_batch)
