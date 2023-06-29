@@ -5,16 +5,19 @@ import numpy as np
 from torchvision import transforms
 from PIL import Image
 import json
-from Bert import Bert
+import os
 
 # TODO:chosen_categories lo prende ancora dallo scope globale
 chosen_categories = ["tops", "bottoms", "shoes", "jewellery"]
 metadata = json.load(open("polyvore_outfits/polyvore_item_metadata.json"))
-
-
-# TODO:Spostare filter_ds e find_category nella classe
-# TODO:Provare a far scorrere immagini e testo nelle due architetture pre-addestrate
-
+# ------------Num-of-Images-------------------
+folder_path = "./polyvore_outfits/images"
+# Get the list of elements in the folder
+elements = os.listdir(folder_path)
+# Count the number of elements
+num_elements = len(elements)
+print("Number of images in the folder:", num_elements)
+# -------------------------------------------
 
 class CustomDataset(Dataset):
     OPTIMAL_LENGTH_PERCENTILE = 70
@@ -134,6 +137,3 @@ class CustomDataset(Dataset):
                 tokenized_description = self.tokenizer(item_description)['input_ids']
                 lenghts.append(len(tokenized_description))
         return int(np.percentile(lenghts, self.OPTIMAL_LENGTH_PERCENTILE))
-
-# TODO: Ricordarsi di farne passare solo 4
-# TODO: Spostare sopra questa inizializzazione

@@ -1,7 +1,7 @@
 from torch.utils.data import DataLoader
 import torch
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("mps")
 
 
 class BertTrainer:
@@ -20,28 +20,24 @@ class BertTrainer:
         self.criterion = torch.nn.TripletMarginLoss(margin=1.0, p=2)
 
     def train(self):
-
+        train_losses = []
+        validation_losses = []
         for epoch in range(self.epochs):
             train_loss = 0.0
             valid_loss = 0.0
             self.model.train()
             for image_batch, description_batch in self.train_loader:
+                image_batch = image_batch.to(device)
+                description_batch = description_batch.to(device)
                 self.optimizer.zero_grad()
                 final_embedding, positive_emb, negative_embedding = self.model(image_batch, description_batch)
                 loss = self.criterion(final_embedding, positive_emb, negative_embedding)
                 loss.backward()
                 self.optimizer.step()
                 train_loss += loss.item()
-            self.model.eval()
-            for image_batch, description_batch in self.val_loader:
-                final_embedding, positive_emb, negative_embedding = self.model(image_batch, description_batch)
-                loss = self.criterion(final_embedding, positive_emb, negative_embedding)
-                valid_loss += loss.item()
             train_loss = train_loss / len(self.train_loader.sampler)
-            valid_loss = valid_loss / len(self.val_loader.sampler)
+            train_losses.append(train_loss)
 
             # print training/validation statistics
-            print('Epoch: {} \tTraining Loss: {:.6f} \tValidation Loss: {:.6f}'.format(
-                epoch, train_loss, valid_loss))
-
-
+            print('Epoch: {} \tTraining Loss: {:.6f} \t'.format(
+                epoch, train_loss))
