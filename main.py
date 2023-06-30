@@ -3,7 +3,7 @@ from dataset import CustomDataset
 from trainer import BertTrainer
 import torch
 from torch import nn
-from utilities import count_parameters
+
 
 device = torch.device('mps')
 # ------Parameters-------
@@ -23,5 +23,4 @@ val_dataset = CustomDataset(path=val_path)
 
 model = Bert(dim_input, dim_output, attention_heads).to(device)
 trainer = BertTrainer(model, train_dataset, val_dataset, batch_size, learning_rate, epochs)
-print(f'The model has {count_parameters(model):,} trainable parameters')
 trainer.train()

@@ -7,19 +7,78 @@ from PIL import Image
 import json
 import os
 
-
 chosen_categories = ["tops", "bottoms", "shoes", "jewellery"]
 metadata = json.load(open("polyvore_outfits/polyvore_item_metadata.json"))
-# ------------Num-of-Images-------------------
-folder_path = "polyvore_outfits/images"
-# Get the list of elements in the folder
-elements = os.listdir(folder_path)
-# Count the number of elements
-num_elements = len(elements)
-print("Number of images in the folder:", num_elements)
+
+# # ------------Num-of-Images-------------------
+# folder_path = "polyvore_outfits/images"
+# # Get the list of elements in the folder
+# elements = os.listdir(folder_path)
+# # Count the number of elements
+# num_elements = len(elements)
+# print("Number of images in the folder:", num_elements)
+
+# TODO:Questa parte è da togliere da qui.Messa qui solo per prova
+train_path = 'polyvore_outfits/disjoint/train.json'
+train = json.load(open(train_path))
+fill_in_the_blank_train_path = "polyvore_outfits/disjoint/fill_in_blank_train.json"
+fill_in_the_blank_train = json.load(open(fill_in_the_blank_train_path))
+train_dict = {el['set_id']: el for el in train}  # Mi serve per la parte nuova
 
 
-# -------------------------------------------
+# ----------------------------------Parte Nuova----------------------------------------
+# Da capire se ha senso seguire questo approccio
+# TODO: Aggiustare queste due funzioni perchè prendono dallo scope globale
+def from_set_id_to_id(list_of_set_id):
+    """
+    Used in map_set_id() function.Starting from a list of setid_position return
+    a list of item_id
+    :param list_of_set_id:
+    :return:
+    """
+    items = []
+    for el in list_of_set_id:
+        set_id, el_position = el.split("_")
+        real_position = int(el_position) - 1
+        real_item_id = train_dict[set_id]["items"][real_position]['item_id']
+        description = metadata[real_item_id]["description"] + metadata[real_item_id]['url_name']
+        category = metadata[real_item_id]["semantic_category"]
+        items.append({"item": real_item_id, "description": description, "category": category})
+    return items
+
+
+def map_set_id():
+    """
+    Starting from fill_in_the_blank_train
+    Iterate through each dict.Taking in account only the outfit with 4 items in the chosen categories
+    :return:
+    """
+    filtered_questions = []
+    for fill_in_the_blank_dict in fill_in_the_blank_train:
+        categories = []
+        outfit = []
+        if len(fill_in_the_blank_dict["question"]) != 4: continue
+        for el in fill_in_the_blank_dict["question"]:
+            set_id, el_position = el.split("_")
+            real_position = int(el_position) - 1
+            real_item_id = train_dict[set_id]["items"][real_position]['item_id']
+            category = metadata[real_item_id]["semantic_category"]
+            description = metadata[real_item_id]["description"] + metadata[real_item_id]['url_name']
+            outfit.append({"item": real_item_id, "description": description, "category": category})
+            categories.append(category)
+        if all(item in chosen_categories for item in categories):
+            answers = from_set_id_to_id(fill_in_the_blank_dict["answers"])
+            outfit.extend(answers)
+            filtered_questions.append(outfit)
+    return filtered_questions
+
+
+filtered_questions = map_set_id()
+print()
+
+
+# ---------------------------------------------------------------------
+
 
 class CustomDataset(Dataset):
     OPTIMAL_LENGTH_PERCENTILE = 70
@@ -36,7 +95,6 @@ class CustomDataset(Dataset):
         self.raw_dataset = json.load(open(path))
         self.filtered_dataset = self.filter_ds(self.raw_dataset)
         self.optimal_length = self.compute_optimal_length()
-        print()
 
     def filter_ds(self, ds):
         """
