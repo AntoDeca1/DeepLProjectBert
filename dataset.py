@@ -7,16 +7,18 @@ from PIL import Image
 import json
 import os
 
-# TODO:chosen_categories lo prende ancora dallo scope globale
+
 chosen_categories = ["tops", "bottoms", "shoes", "jewellery"]
 metadata = json.load(open("polyvore_outfits/polyvore_item_metadata.json"))
 # ------------Num-of-Images-------------------
-folder_path = "./polyvore_outfits/images"
+folder_path = "polyvore_outfits/images"
 # Get the list of elements in the folder
 elements = os.listdir(folder_path)
 # Count the number of elements
 num_elements = len(elements)
 print("Number of images in the folder:", num_elements)
+
+
 # -------------------------------------------
 
 class CustomDataset(Dataset):

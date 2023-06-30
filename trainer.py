@@ -26,7 +26,8 @@ class BertTrainer:
             train_loss = 0.0
             valid_loss = 0.0
             self.model.train()
-            for image_batch, description_batch in self.train_loader:
+            for index, (image_batch, description_batch) in enumerate(self.train_loader):
+                print(f"Batch: {index}")
                 image_batch = image_batch.to(device)
                 description_batch = description_batch.to(device)
                 self.optimizer.zero_grad()
