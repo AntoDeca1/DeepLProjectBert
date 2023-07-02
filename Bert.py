@@ -146,18 +146,30 @@ class Bert(nn.Module):
         super().__init__()
         self.embedding = BertEmbedder()
         self.encoder = Encoder(dim_inp, dim_out, attention_heads, dropout=0.1)
-        self.final_embedding_layer = nn.Linear(dim_inp * 4, dim_inp)
+        # self.final_embedding_layer = nn.Linear(dim_inp * 4, dim_inp)
 
     def forward(self, imgs, descs):
         embeddings = self.embedding(imgs, descs)
         input_embeddings = embeddings[:, :4, :]
-        postive_pair = embeddings[:, -2, :]
-        negative_pair = embeddings[:, -1, :]
+        postive_pair = embeddings[:, 4, :]
+        negative_pairs = embeddings[:, 5:, :]  # 3, embedding_dim RICONTROLLARE
         encoded = self.encoder(input_embeddings)
-        batch_size, num_elements, embedding_dim = encoded.shape
-        encoded_reshaped = encoded.reshape(batch_size, num_elements * embedding_dim)
-
-        final_embedding = self.final_embedding_layer(encoded_reshaped)
-        return final_embedding, postive_pair, negative_pair
+        # Mean instead of FC layer.
+        final_embedding = encoded.mean(-2)  # batch_size, embedding_dim
+        # final_embedding = encoded.max(-2).values # batch_size, embedding_dim
+        return final_embedding, postive_pair, negative_pairs
 
 # TODO:Generalizzare il codice(parametrizzare)
+
+
+#### INFERENZA
+
+# final_embedding, positive_emb, negative_embeddings = self.model(image_batch, description_batch)
+#
+# positive_emb # bsize, 1, emb_dim
+# negative_embeddings # bsize, 3, emb_dim
+# final_embedding # bsize, 1, emb_dim (devi fare una unsqueeze perche di base e' bsize, emb_dim)
+#
+# candidates = torch.vstack([positive_emb, negative_embeddings])
+# dists = ((candidates-final_embedding)**2).sum(1)
+# inference = torch.argmin(dists)
