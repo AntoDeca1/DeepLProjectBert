@@ -10,16 +10,32 @@ class BertEmbedder(nn.Module):
     - DISTILBERT (Pretrained-by-HuggingFace):Used to encode textual rapresentations
     - RESNET18(Pretrained-by-torchHub):Used to encode visual rappresentations
     Image and text embeddings are combined to achieve an overall representation
+    After DISTILBERT and RESNET we added a sequence a FC layer and a normalization
+    like suggested in the paper linked in the README.md
     """
 
-    def __init__(self):
+    def __init__(self, dropout=0.2, ):
         super().__init__()
         self.text_model = DistilBertModel.from_pretrained("distilbert-base-uncased")
         cnn_model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
         cnn_layers = cnn_model._modules
         cnn_layers.pop('fc')
         self.cnn_model = nn.Sequential(cnn_layers)
-        self.embedding = nn.Linear(1280, 128)
+        self.feed_forward_distillBert = nn.Sequential(
+            nn.Linear(768, 1024),
+            nn.Dropout(dropout),
+            nn.GELU(),
+            nn.Linear(1024, 256),
+            nn.Dropout(dropout)
+        )
+        self.feed_forward_resNet = nn.Sequential(
+            nn.Linear(512, 1024),
+            nn.Dropout(dropout),
+            nn.GELU(),
+            nn.Linear(1024, 256),
+            nn.Dropout(dropout)
+        )
+        self.embedding = nn.Linear(512, 128)
 
     def forward(self, imgs_batch, descs_batch):
         """
@@ -38,9 +54,32 @@ class BertEmbedder(nn.Module):
         imgs_emb = self.cnn_model(imgs)[:, :, 0, 0]  # (batch_size*n_items, 512)
         imgs_emb = imgs_emb.reshape(batch_size, n_items, imgs_emb.shape[-1])
 
-        emb = torch.cat((descs_emb, imgs_emb), dim=-1)
+        descs_emb = self.feed_forward_distillBert(descs_emb)
+        imgs_emb = self.feed_forward_resNet(imgs_emb)
+        normalized_imgs_embed = self.normalize_hypersphere(imgs_emb)
+        normalized_descs_emb = self.normalize_hypersphere(descs_emb)
+
+        emb = torch.cat((normalized_imgs_embed, normalized_descs_emb), dim=-1)
 
         return self.embedding(emb)
+
+    def normalize_hypersphere(self, vec):
+        """
+        This function is used to normalize each vector in the batch
+        TODO:We should remove the last two lines of code since they are only a check
+        :param vec:
+        :return:
+        """
+        batch_size, num_elements, embedding_dim = vec.shape
+        reshaped_vec = vec.view(batch_size * num_elements, embedding_dim)
+        norms = torch.norm(reshaped_vec, p=2, dim=-1, keepdim=True)
+
+        normalized_tensor = reshaped_vec / norms
+        normalized_tensor = normalized_tensor.view(vec.shape)
+
+        norms = torch.norm(normalized_tensor.view(vec.shape[0], -1, vec.shape[-1]), p=2, dim=-1)
+        print(norms)
+        return normalized_tensor
 
 
 class AttentionHead(nn.Module):
