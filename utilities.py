@@ -2,18 +2,6 @@ from torch import nn
 import matplotlib.pyplot as plt
 import os
 import shutil
-
-
-# Example list of loss values
-# loss_values = [0.037226, 0.033801, 0.032849, 0.032698, 0.032696, 0.033275, 0.031753, 0.031765, 0.031801, 0.032914]
-#
-# # Plotting the loss values
-# plt.plot(loss_values)
-# plt.xlabel('Epoch')
-# plt.ylabel('Loss')
-# plt.title('Loss during Epochs')
-# plt.show()
-
 def count_parameters(model):
     """
     Count the number of parameters of a pytorch model
@@ -57,20 +45,27 @@ folder_path = "./polyvore_outfits/images"
 #         shutil.copy(source_path, destination_path)
 
 
-path = './polyvore_outfits/subfolders'
-# model.apply(initialize_weights)
-# Path to the parent directory
-
-# Iterate over the directories in the parent directory
-num_elements = 0
-# TODO:This script is used only to check that no images were lost during the division in subfolders
-for directory in os.listdir(path):
-    directory_path = os.path.join(path, directory)
-
-    # Check if the current item is a directory
-    if os.path.isdir(directory_path):
-        num_elements += len(os.listdir(directory_path))
-        print(f"Directory: {directory}, Number of Elements: {num_elements}")
-
-print(num_elements)
-# Set the directory path on your Google Drive
+# path = './polyvore_outfits/subfolders'
+# # model.apply(initialize_weights)
+# # Path to the parent directory
+#
+# # Iterate over the directories in the parent directory
+# num_elements = 0
+# # TODO:This script is used only to check that no images were lost during the division in subfolders
+# for directory in os.listdir(path):
+#     directory_path = os.path.join(path, directory)
+#
+#     # Check if the current item is a directory
+#     if os.path.isdir(directory_path):
+#         num_elements += len(os.listdir(directory_path))
+#         print(f"Directory: {directory}, Number of Elements: {num_elements}")
+#
+# print(num_elements)
+# # Set the directory path on your Google Drive
+import os
+folder_path = "./polyvore_outfits/subfolders/1_7"
+# Get the list of elements in the folder
+elements = os.listdir(folder_path)
+# Count the number of elements
+num_elements = len(elements)
+print("Number of images in the folder:", num_elements)

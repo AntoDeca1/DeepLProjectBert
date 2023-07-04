@@ -9,6 +9,8 @@ import json
 chosen_categories = ["tops", "bottoms", "shoes", "jewellery"]
 metadata = json.load(open("polyvore_outfits/polyvore_item_metadata.json"))
 
+
+
 class CustomDataset(Dataset):
     OPTIMAL_LENGTH_PERCENTILE = 70
 

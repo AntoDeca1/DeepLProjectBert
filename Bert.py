@@ -14,7 +14,7 @@ class BertEmbedder(nn.Module):
     like suggested in the paper linked in the README.md
     """
 
-    def __init__(self, dropout=0.2, ):
+    def __init__(self, dropout=0.1, ):
         super().__init__()
         self.text_model = DistilBertModel.from_pretrained("distilbert-base-uncased")
         cnn_model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
@@ -66,7 +66,6 @@ class BertEmbedder(nn.Module):
     def normalize_hypersphere(self, vec):
         """
         This function is used to normalize each vector in the batch
-        TODO:We should remove the last two lines of code since they are only a check
         :param vec:
         :return:
         """
@@ -77,8 +76,7 @@ class BertEmbedder(nn.Module):
         normalized_tensor = reshaped_vec / norms
         normalized_tensor = normalized_tensor.view(vec.shape)
 
-        norms = torch.norm(normalized_tensor.view(vec.shape[0], -1, vec.shape[-1]), p=2, dim=-1)
-        print(norms)
+        # norms = torch.norm(normalized_tensor.view(vec.shape[0], -1, vec.shape[-1]), p=2, dim=-1)
         return normalized_tensor
 
 
@@ -143,7 +141,7 @@ class MultiHeadAttention(nn.Module):
         s = [head(input_tensor) for head in self.heads]
         scores = torch.cat(s, dim=-1)
         scores = self.linear(scores)
-        return self.norm(scores)
+        return self.norm(input_tensor + scores)
 
 
 class Encoder(nn.Module):
@@ -181,20 +179,24 @@ class Encoder(nn.Module):
 
 
 class Bert(nn.Module):
-    def __init__(self, dim_inp, dim_out, attention_heads=4):
+    def __init__(self, dim_inp, dim_out, num_encoders=4, attention_heads=4):
         super().__init__()
+        self.attention_heads = attention_heads
+        self.num_encoders = num_encoders
         self.embedding = BertEmbedder()
-        self.encoder = Encoder(dim_inp, dim_out, attention_heads, dropout=0.1)
-        # self.final_embedding_layer = nn.Linear(dim_inp * 4, dim_inp)
+        self.encoders = nn.ModuleList([
+            Encoder(dim_inp, dim_out, attention_heads, dropout=0.1) for _ in range(num_encoders)
+        ])
 
     def forward(self, imgs, descs):
         embeddings = self.embedding(imgs, descs)
         input_embeddings = embeddings[:, :4, :]
         postive_pair = embeddings[:, 4, :]
         negative_pairs = embeddings[:, 5:, :]  # 3, embedding_dim RICONTROLLARE
-        encoded = self.encoder(input_embeddings)
+        for layer in self.encoders:
+            input_embeddings = layer(input_embeddings)
         # Mean instead of FC layer.
-        final_embedding = encoded.mean(-2)  # batch_size, embedding_dim
+        final_embedding = input_embeddings.mean(-2)  # batch_size, embedding_dim
         # final_embedding = encoded.max(-2).values # batch_size, embedding_dim
         return final_embedding, postive_pair, negative_pairs
 

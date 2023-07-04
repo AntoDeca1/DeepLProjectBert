@@ -44,7 +44,6 @@ class BertTrainer:
             train_loss = train_loss / len(self.train_loader.sampler)
             train_losses.append(train_loss)
 
-            # print training/validation statistics
             print('Epoch: {} \tTraining Loss: {:.6f} \t'.format(
                 epoch, train_loss))
 
@@ -65,5 +64,5 @@ class BertTrainer:
         }, self.check_point_dir)
 
         print()
-        # print(f"Model saved as '{name}' for {time.time() - prev:.2f}s")
+        print(f"Model saved as '{name}' for {time.time() - prev:.2f}s")
         print()
