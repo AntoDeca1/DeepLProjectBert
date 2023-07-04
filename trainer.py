@@ -3,6 +3,7 @@ import torch
 import time
 from datetime import datetime
 import neptune
+import os
 
 device = torch.device("cpu")
 
@@ -70,7 +71,7 @@ class BertTrainer:
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'loss': loss,
-        }, self.check_point_dir)
+        }, os.path.join(self.check_point_dir, name))
 
         print()
         print(f"Model saved as '{name}' for {time.time() - prev:.2f}s")
