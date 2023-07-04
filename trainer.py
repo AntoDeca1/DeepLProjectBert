@@ -1,8 +1,15 @@
 from torch.utils.data import DataLoader
 import torch
 import time
+from datetime import datetime
+import neptune
 
 device = torch.device("cpu")
+
+run = neptune.init_run(
+    project="antoniodecandia01/DeepLBert",
+    api_token="eyJhcGlfYWRkcmVzcyI6Imh0dHBzOi8vYXBwLm5lcHR1bmUuYWkiLCJhcGlfdXJsIjoiaHR0cHM6Ly9hcHAubmVwdHVuZS5haSIsImFwaV9rZXkiOiJmOTEwODllMS0zMDBmLTQ0NWQtOGNhZi1iYTkyMDUxNGUzMjUifQ==",
+)
 
 
 class BertTrainer:
@@ -41,6 +48,7 @@ class BertTrainer:
                 loss.backward()
                 self.optimizer.step()
                 train_loss += loss.item()
+                run['metrics/train_loss-2'].append(loss.item())
             train_loss = train_loss / len(self.train_loader.sampler)
             train_losses.append(train_loss)
 
@@ -53,9 +61,10 @@ class BertTrainer:
         DA COMPLETARE
         :return:
         """
+        prev = time.time()
         if self.check_point_dir is None:
             return
-
+        name = f"bert_epoch{epoch}_{datetime.utcnow().timestamp():.0f}.pt"
         torch.save({
             'epoch': epoch,
             'model_state_dict': self.model.state_dict(),

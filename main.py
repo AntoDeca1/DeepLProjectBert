@@ -2,9 +2,10 @@ from Bert import Bert
 from dataset import CustomDataset
 from trainer import BertTrainer
 import torch
-from torch import nn
+import neptune
 import json
 from utilities import initialize_weights
+
 
 device = torch.device('cpu')
 # ------Parameters-------
@@ -34,3 +35,4 @@ model = Bert(dim_input, dim_output, num_encoders, attention_heads).to(device)
 model.apply(initialize_weights)
 trainer = BertTrainer(model, train_dataset, val_dataset, batch_size, learning_rate, epochs)
 trainer.train()
+
