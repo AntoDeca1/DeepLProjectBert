@@ -1,3 +1,4 @@
+# Bert.py
 import torch
 from transformers import DistilBertModel
 from torch import nn
@@ -14,9 +15,18 @@ class BertEmbedder(nn.Module):
     like suggested in the paper linked in the README.md
     """
 
-    def __init__(self, dropout=0.1, ):
+    def __init__(self, dim_inp, dropout=0.1, ):
+        """
+        :param dropout: Dropout probability
+        #TextEmbedder:DistilBert not fine-tuned during training
+        #ImagesEmbedder:ResNet layers before the classification one.Fine-Tuned during
+        training
+        """
         super().__init__()
         self.text_model = DistilBertModel.from_pretrained("distilbert-base-uncased")
+        # To not fine_tune DistilBert
+        for param in self.text_model.parameters():
+            param.requires_grad = False
         cnn_model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet18', pretrained=True)
         cnn_layers = cnn_model._modules
         cnn_layers.pop('fc')
@@ -35,7 +45,7 @@ class BertEmbedder(nn.Module):
             nn.Linear(1024, 256),
             nn.Dropout(dropout)
         )
-        self.embedding = nn.Linear(512, 128)
+        self.embedding = nn.Linear(512, dim_inp)
 
     def forward(self, imgs_batch, descs_batch):
         """
@@ -66,6 +76,7 @@ class BertEmbedder(nn.Module):
     def normalize_hypersphere(self, vec):
         """
         This function is used to normalize each vector in the batch
+        This type of normalization force the norm of the vector to be unitary
         :param vec:
         :return:
         """
@@ -76,7 +87,6 @@ class BertEmbedder(nn.Module):
         normalized_tensor = reshaped_vec / norms
         normalized_tensor = normalized_tensor.view(vec.shape)
 
-        # norms = torch.norm(normalized_tensor.view(vec.shape[0], -1, vec.shape[-1]), p=2, dim=-1)
         return normalized_tensor
 
 
@@ -114,7 +124,7 @@ class AttentionHead(nn.Module):
         """
         query, key, value = self.w_q(x), self.w_k(x), self.w_v(x)
 
-        scale = math.sqrt(query.size(1))  # Scaling:sqrt(64)
+        scale = math.sqrt(query.size(2))  # Scaling:sqrt(64)
         scores = torch.bmm(query, key.transpose(1, 2)) / scale
 
         attn = self.softmax(scores)
@@ -125,12 +135,14 @@ class AttentionHead(nn.Module):
 
 class MultiHeadAttention(nn.Module):
     """
-    The multiHead attention implemented in the classical way
+    Multihead attention computed as:
+    1)Each head is computed separately
+    2)The heads resulting vector are concatenated
+    3)The dimensionality is taken to the input_dim through a FC layer
     """
 
     def __init__(self, num_heads, dim_inp, dim_out):
         super(MultiHeadAttention, self).__init__()
-
         self.heads = nn.ModuleList([
             AttentionHead(dim_inp, dim_out) for _ in range(num_heads)
         ])
@@ -146,7 +158,7 @@ class MultiHeadAttention(nn.Module):
 
 class Encoder(nn.Module):
     """
-    This is the class for only one Decoder Layer
+    This is the class for only one Encoder Layer
     1)MultiHeadAttention
     2)FeedForward
     3)Normalization(We should include the residual connections)
@@ -156,10 +168,10 @@ class Encoder(nn.Module):
         super(Encoder, self).__init__()
         self.attention = MultiHeadAttention(attention_heads, dim_input, dim_output)
         self.feed_forward = nn.Sequential(
-            nn.Linear(dim_input, dim_output),
+            nn.Linear(dim_input, dim_input * 4),
             nn.Dropout(dropout),
             nn.GELU(),
-            nn.Linear(dim_output, dim_input),
+            nn.Linear(dim_input * 4, dim_input),
             nn.Dropout(dropout)
         )
         self.norm = nn.LayerNorm(dim_input)
@@ -169,7 +181,7 @@ class Encoder(nn.Module):
         Encoder Composed by
         1) A MultiHeadAttention
         2) FeedForwardNN
-        3) LayerNorm(ResidualConnection+ Output)
+        3) LayerNorm(input_tensor+ output)
         :param input_tensor:
         :return:
         """
@@ -179,23 +191,35 @@ class Encoder(nn.Module):
 
 
 class Bert(nn.Module):
-    def __init__(self, dim_inp, dim_out, num_encoders=4, attention_heads=4):
+    def __init__(self, dim_inp, dim_out, num_encoders=4, attention_heads=4, dropout=0.1):
+        """
+        Whole architecture class
+        :param dim_inp: Input dimension to the final Bert Model
+        :param dim_out: Output dimension
+        :param num_encoders: Num of encoders layers
+        :param attention_heads: Num of heads in each MultiHeadAttention
+        :param dropout: DropOut probability
+        """
         super().__init__()
         self.attention_heads = attention_heads
         self.num_encoders = num_encoders
-        self.embedding = BertEmbedder()
+        self.embedding = BertEmbedder(dim_inp)
         self.encoders = nn.ModuleList([
-            Encoder(dim_inp, dim_out, attention_heads, dropout=0.1) for _ in range(num_encoders)
+            Encoder(dim_inp, dim_out, attention_heads, dropout=dropout) for _ in range(num_encoders)
         ])
 
     def forward(self, imgs, descs):
+        """
+        :param imgs:Batch of sequence of images
+        :param descs:Batch of sequence of description
+        :return: predicted_embedding,positive_pair,negative_pairs(**)
+        **:N.B:Pairs since they are 3 in our specific case
+        """
         embeddings = self.embedding(imgs, descs)
         input_embeddings = embeddings[:, :4, :]
         postive_pair = embeddings[:, 4, :]
-        negative_pairs = embeddings[:, 5:, :]  # 3, embedding_dim
+        negative_pairs = embeddings[:, 5:, :]
         for layer in self.encoders:
             input_embeddings = layer(input_embeddings)
-        # Mean instead of FC layer.
-        final_embedding = input_embeddings.mean(-2)  # batch_size, embedding_dim
+        final_embedding = input_embeddings.mean(-2)
         return final_embedding, postive_pair, negative_pairs
-

@@ -1,3 +1,4 @@
+#dataset.py
 import torch
 from transformers import DistilBertTokenizer
 from torch.utils.data import Dataset
@@ -10,14 +11,21 @@ chosen_categories = ["tops", "bottoms", "shoes", "jewellery"]
 metadata = json.load(open("polyvore_outfits/polyvore_item_metadata.json"))
 
 
-
+# (**):train/test/valid.json as json are list of objects.Sets dict is simply
+# a big object created starting from this json.(See the main.py)
 class CustomDataset(Dataset):
     OPTIMAL_LENGTH_PERCENTILE = 70
 
     def __init__(self, path, sets_dict):
+        """
+        :param path: Path where fill_in_blank_train/test/validation.json is stored
+        :param sets_dict:The dictionary realized from the train/test/validation.json(**)
+        """
         self.tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
         self.cnn_preprocess = transforms.Compose([
             transforms.Resize(256),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(10),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -31,7 +39,8 @@ class CustomDataset(Dataset):
     def from_set_id_to_id(self, list_of_set_id, outfit_set_id):
         """
         Used in map_set_id() function.Starting from a list of setid_position return
-        a list of item_id
+        a list of item_id.The candidate of the same outfit(set_id) is added on top of the
+        candiates.It will always be the element with index 4
         :param list_of_set_id:
         :return:
         """
@@ -41,7 +50,7 @@ class CustomDataset(Dataset):
 
             real_position = int(el_position) - 1
             real_item_id = self.sets_dict[set_id]["items"][real_position]['item_id']
-            description = metadata[real_item_id]["description"] + metadata[real_item_id]['url_name']
+            description = metadata[real_item_id]['url_name']
             category = metadata[real_item_id]["semantic_category"]
             if outfit_set_id == set_id:
                 items.insert(0, {"item": real_item_id, "description": description, "category": category})
@@ -52,7 +61,8 @@ class CustomDataset(Dataset):
     def map_set_id(self, ds):
         """
         Starting from fill_in_the_blank_train
-        Iterate through each dict.Taking in account only the outfit with 4 items in the chosen categories
+        Iterate through each dict.If the query has more then 4 elements but in the given category is taken
+        but truncated.For the queries that pass this check are appended the possibile candidates
         :return:
         """
         filtered_dataset = []
@@ -66,7 +76,7 @@ class CustomDataset(Dataset):
                 category = metadata[real_item_id]["semantic_category"]
                 if category not in chosen_categories:
                     continue
-                description = metadata[real_item_id]["description"] + metadata[real_item_id]['url_name']
+                description = metadata[real_item_id]['url_name']
                 outfit.append({"item": real_item_id, "description": description, "category": category})
                 categories.append(category)
                 if len(outfit) == 4: break
@@ -120,8 +130,8 @@ class CustomDataset(Dataset):
         """
         Iterate through the whole training set and after saving all description lengths
         compute the optimal length
-        "Description bigger than optimal length will be truncated instead the smaller ones
-        padded
+        Description bigger than optimal length will be truncated in get_item() instead the smaller ones
+        padded.
         :return:optimal_length
         """
         lenghts = []

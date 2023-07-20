@@ -1,71 +1,98 @@
 from torch import nn
-import matplotlib.pyplot as plt
-import os
-import shutil
-def count_parameters(model):
+import pandas as pd
+import plotly.graph_objects as go
+import numpy as np
+
+
+def plot_results_neptune(plot_path, training=True):
     """
-    Count the number of parameters of a pytorch model
-    :param model:
+    Given a csv generated in the shape of the ones generated from read_accuracy_csv() ,realize plots
+    proposed_results
+    :param plot_path:
+    :param training:
     :return:
     """
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+    df = pd.read_csv(plot_path, names=["C1", "C2", "C3"])
+
+    fig = go.Figure()
+    fig.add_trace(go.Line(x=df['C1'], y=df['C3'], mode='lines', name="Accuracy_Training"))
+    # fig.add_trace(go.Line(x=df['index'], y=df['Validation_Accuracy'], mode='lines', name="Accuracy_Validation"))
+    fig.update_layout(
+        title='Training Loss',
+        xaxis_title='Epoch',
+        yaxis_title='Loss'
+    )
+    fig.show()
 
 
-def initialize_weights(m):
+def plot_results(plot_path, training=True):
     """
-    How to inizialize weights with Xavier.
-    :param m:
+    Given a csv generated in the shape of the ones generated from read_accuracy_csv() ,realize
+    proposed_results
+    :param plot_path:
+    :param training:
     :return:
     """
-    if hasattr(m, 'weight') and m.weight.dim() > 1:
-        nn.init.xavier_uniform_(m.weight.data)
+    df = pd.read_csv(plot_path)
+    df = df.iloc[:30]
+
+    fig = go.Figure()
+    fig.add_trace(go.Line(x=df['index'], y=df['Training_Accuracy'], mode='lines', name="Accuracy_Training"))
+    fig.add_trace(go.Line(x=df['index'], y=df['Validation_Accuracy'], mode='lines', name="Accuracy_Validation"))
+    fig.update_layout(
+        title='Accuracy Comparison',
+        xaxis_title='Epoch',
+        yaxis_title='Loss'
+    )
+
+    fig1 = go.Figure()
+    fig1.add_trace(go.Line(x=df['index'], y=df['Training_Losses'], mode='lines', name="Training_loss"))
+    fig1.add_trace(go.Line(x=df['index'], y=df['Validation_Losses'], mode='lines', name="Validation_Loss"))
+    fig1.update_layout(
+        title='Losses Comparison',
+        xaxis_title='Epoch',
+        yaxis_title='Loss'
+    )
+
+    fig.show()
+    fig1.show()
 
 
-# Path to the folder containing the images
-folder_path = "./polyvore_outfits/images"
+def read_accuracy_txt(path):
+    """
+    From the log taken from Kaggle or Colab extract the training and the validation losses/accuracies
+    It can be used if we forget to keep track of them during the training process :)
+    :param path:
+    :return:
+    """
+    training_losses = []
+    training_accuracies = []
+    validation_accuracies = []
+    validation_losses = []
+    file = open(path, 'r')
 
-# TODO: THIS SCRIPT IS USED TO CREATE SUBFOLDERS STARTING FROM THE FOLDERS COMPOSED OF IMAGES
+    # Read the contents of the file
+    file_contents = file.read()
+    lines = file_contents.split("\n")  # List of lines
+    lines_filterd = [line for line in lines if line.find("Epoch") != -1]
+    for line in lines_filterd:
+        line = line.split("\t")
+        training_loss, validation_loss, training_accuracy, validation_accuracy = [float(el.split(":")[1]) for el in line
+                                                                                  if
+                                                                                  el.find("Training") != -1 or el.find(
+                                                                                      "Validation") != -1]
+        training_losses.append(training_loss)
+        validation_losses.append(validation_loss)
+        training_accuracies.append(training_accuracy)
+        validation_accuracies.append(validation_accuracy)
+    file.close()
 
-# Iterate over the images in the folder
-# for filename in os.listdir(folder_path):
-#     print(f"Image {filename}")
-#     if filename.endswith(".jpg") or filename.endswith(".png"):
-#         # Get the first and last numbers from the filename
-#         identifier = filename[:-4]  # Remove the file extension
-#         first_number = int(identifier[:1])
-#         last_number = int(identifier[-1])
-#
-#         # Create subfolders based on the first and last numbers
-#         subfolder_path = f"./polyvore_outfits/subfolders/{first_number}_{last_number}"
-#         os.makedirs(subfolder_path, exist_ok=True)
-#
-#         # Move the image to the corresponding subfolder
-#         source_path = os.path.join(folder_path, filename)
-#         destination_path = os.path.join(subfolder_path, filename)
-#         shutil.copy(source_path, destination_path)
-
-
-# path = './polyvore_outfits/subfolders'
-# # model.apply(initialize_weights)
-# # Path to the parent directory
-#
-# # Iterate over the directories in the parent directory
-# num_elements = 0
-# # TODO:This script is used only to check that no images were lost during the division in subfolders
-# for directory in os.listdir(path):
-#     directory_path = os.path.join(path, directory)
-#
-#     # Check if the current item is a directory
-#     if os.path.isdir(directory_path):
-#         num_elements += len(os.listdir(directory_path))
-#         print(f"Directory: {directory}, Number of Elements: {num_elements}")
-#
-# print(num_elements)
-# # Set the directory path on your Google Drive
-import os
-folder_path = "./polyvore_outfits/subfolders/1_7"
-# Get the list of elements in the folder
-elements = os.listdir(folder_path)
-# Count the number of elements
-num_elements = len(elements)
-print("Number of images in the folder:", num_elements)
+    df = pd.DataFrame(list(zip(training_losses, validation_losses, training_accuracies, validation_accuracies)),
+                      columns=["Training_Losses", "Validation_Losses", "Training_Accuracy", "Validation_Accuracy"])
+    print(
+        f"Best Validation Accuracy: {max(validation_accuracies)}"
+        f"\nBest Validation Epoch: {np.argmax(validation_accuracies)}"
+        f"\nEpochs: {len(df)}"
+        f"\nBest Training Accuracy {max(training_accuracies)}")
+    df = df.reset_index()
+    return df
